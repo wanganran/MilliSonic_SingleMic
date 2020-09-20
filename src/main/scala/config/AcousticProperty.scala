@@ -6,7 +6,7 @@ import utils.{Position, int}
   * Created by anwang on 7/10/2017.
   */
 object AcousticProperty {
-  val SR = 48000
+  val SR = 50000
 
   val ARRAY_BUFFER_SIZE=100
   val DRIVER_PREHEAT=10
