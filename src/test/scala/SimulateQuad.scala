@@ -1,6 +1,5 @@
 import config.AcousticProperty
-import blocks.SignalGenerator
-import blocks.QuadSeparator
+import blocks.{QuadSeparator, QuadSynchronization, SignalGenerator}
 import FMCW.{FMCWFilter, FMCWTrack}
 import utils.int
 
@@ -42,6 +41,9 @@ object SimulateQuad extends App {
       (a, b) =>
         a.indices.map(i => a(i) + b(i)).toArray
     }
+
+  val sync=new QuadSynchronization(generater.generateTemplate())
+  val snr, offset=sync.input(initSignals)
 
   val separator = new QuadSeparator(
     generater.getPhaseFunc(),

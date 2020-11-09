@@ -124,7 +124,7 @@ class FMCWFilter(timeOffset:Float) {
 
       val freqMax = argmax(freqs, WINDOWSIZE)
       lastPeak = Some(freqMax)
-      println(freqMax)
+      //println(freqMax)
     }
 
     val kernel = buildKernel(lastPeak.get)
