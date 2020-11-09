@@ -98,7 +98,7 @@ class FMCWFilter(timeOffset:Float) {
 
   private var sampOffset=0
 
-  private def modx(x:Int, m:Int)=(x+m)%m
+  private def modx(x:Int, m:Int):Int=if(x>=0) x%m else modx(x+m,m)
   //return (raw_phases, raw_freq, distance (in s), velocity (relative to speed of sound))
   private def doFMCWFilter(chirpI:Array[Float], chirpQ:Array[Float], realSig:Array[Float], begin:Int)= {
     convFFT.realBpf(realSig, freqMin, freqMax)
