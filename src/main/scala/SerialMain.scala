@@ -46,7 +46,7 @@ object SerialMain extends App {
   var off = -1
 
   class ClockSync{
-    val CLOCK=16*1024*1024f
+    val CLOCK=16*1000*1000f
     val bufferSize=20
     val CLOCK_PER_SAMPLE=CLOCK/AcousticProperty.SR
     var timePerSamples=List[Float]()
