@@ -27,7 +27,7 @@ object SerialMain extends App {
     }
   }
 
-  val input=InputAdapter(false, "C:/Users/wanga/Downloads/data.bin")
+  val input=if(args(0).equals("serial")) InputAdapter(true, args(1)) else InputAdapter(false, args(1))
   //val input=InputAdapter(true, args(0))
 
 
