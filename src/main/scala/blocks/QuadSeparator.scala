@@ -13,7 +13,8 @@ class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
   }
 
   private val conv = new Conv(AcousticProperty.SINARR_DURATION)
-  private val quarter = AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE / 5
+
+  private val quarter = AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE / (AcousticProperty.CONCURRENT_TX+1)
 
   def coswind(i: Float) = (Math.cos(i * Math.PI).toFloat + 1) / 2
 
@@ -39,7 +40,7 @@ class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
   def input(sig: Array[Float], id: Int, offset: Int): Array[Array[Float]] = {
 
     val newSig = new Array[Float](AcousticProperty.SINARR_DURATION)
-    val result = for (i <- 0 until 4) yield {
+    val result = for (i <- 0 until AcousticProperty.CONCURRENT_TX) yield {
       val currSig = if (i == 0) lastSig else lastSig.slice(quarter * i, lastSig.length) ++ sig.slice(0, quarter * i)
       val sigPhase = conv.fftReal(currSig)
       freqs.foreach { f =>

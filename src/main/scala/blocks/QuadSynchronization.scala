@@ -14,7 +14,7 @@ class QuadSynchronization(template: Array[Float], thres: Float = 0f, init_sample
 
   private val syncBuffer = new Array[Float](template.length)
   private var ptr = 0
-  private var gap = AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE / 5
+  private var gap = AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE / (AcousticProperty.CONCURRENT_TX + 1)
 
   private def modr(i: Int) = i % template.length
 
@@ -28,20 +28,18 @@ class QuadSynchronization(template: Array[Float], thres: Float = 0f, init_sample
         int(AcousticProperty.SINARR_FREQ_MIN * template.length / AcousticProperty.SR) - 1,
         int(AcousticProperty.SINARR_FREQ_MAX * template.length / AcousticProperty.SR) + 1)
       val raw2 = Array.concat(raw, raw)
-      val peaks = new Array[Int](5)
+      val peaks = new Array[Int](AcousticProperty.CONCURRENT_TX + 1)
       val peak1 = argmax(raw, raw.length)
       val snr = raw(peak1) / (raw.sum / raw.length)
       if (snr < thres) None else {
         peaks(0) = peak1
-        peaks(1) = argmax(raw2.slice(peak1 + gap / 2, peak1 + 3 * gap / 2), gap) + peak1 + gap / 2
-        peaks(2) = argmax(raw2.slice(peak1 + 3 * gap / 2, peak1 + 5 * gap / 2), gap) + peak1 + 3 * gap / 2
-        peaks(3) = argmax(raw2.slice(peak1 + 5 * gap / 2, peak1 + 7 * gap / 2), gap) + peak1 + 5 * gap / 2
-        peaks(4) = argmax(raw2.slice(peak1 + 7 * gap / 2, peak1 + 9 * gap / 2), gap) + peak1 + 7 * gap / 2
+        for (i <- 1 until AcousticProperty.CONCURRENT_TX + 1)
+          peaks(i) = argmax(raw2.slice(peak1 + (i * 2 - 1) * gap / 2, peak1 + (i * 2 + 1) * gap / 2), gap) + peak1 + (i * 2 - 1) * gap / 2
 
         //select the min
         val x = argmax(peaks.map(i => -Math.abs(raw2(i))))
         //get the next chunk
-        val offset = peaks((x + 1) % 5) - init_sample
+        val offset = peaks((x + 1) % (AcousticProperty.CONCURRENT_TX + 1)) - init_sample
         val off = (template.length - offset + AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE) % AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE
         Some((snr, off))
       }

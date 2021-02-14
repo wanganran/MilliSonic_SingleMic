@@ -54,6 +54,12 @@ object SerialMain extends App {
     }
     var lastSeq = -1
     var lastTs = -1
+
+    var unavail=List[(Int,Int)]()
+
+    private def mod_diff(a:Int, b:Int, mod:Int)=if(a-b >= -mod/2 && a-b <= mod/2) a-b else if(a-b < -mod/2) a-b+mod else a-b-mod
+
+
     def inputHeader(h:Header): Unit ={
       if(lastSeq>=0 && h.seq==(lastSeq+1)%256){
         lastSeq=h.seq
@@ -63,6 +69,8 @@ object SerialMain extends App {
         if(timePerSamples.length==bufferSize)
           timePerSamples=timePerSamples.tail
       } else {
+        // packet loss, mark unavailability
+        unavail:+=(h.byteIndex->mod_diff(h.seq, lastSeq, 256))
         lastSeq=h.seq
         lastTs=h.timestamp
       }
@@ -72,6 +80,7 @@ object SerialMain extends App {
       val avg=timePerSamples.sorted.slice(1, bufferSize-1).sum/(bufferSize-2)
       avg/CLOCK_PER_SAMPLE-1
     }
+
   }
 
   val clockSync=new ClockSync()
@@ -114,7 +123,7 @@ object SerialMain extends App {
 
   val buffer = new Array[Byte](AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE * 2)
   val pkt=new Array[Float](AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE)
-  val headerExtraction=new HeaderExtraction(buffer.length,{h=>clockSync.inputHeader(h)}, {data=>
+  val headerExtraction=new HeaderExtraction(buffer.length,{h=>clockSync.inputHeader(h)}, {(idx, data)=>
     if(clockSync.ready()) {
       val arr = utils.shortDeserialize(data).map(_ / 32768f)
       if (off < 0) {

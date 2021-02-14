@@ -1,11 +1,13 @@
 package utils
 
-case class Header(seq:Int, timestamp:Int, lastPacketLen:Int)
+case class Header(seq:Int, timestamp:Int, lastPacketLen:Int, byteIndex:Int)
 object Header{
-  val LENGTH=13 //Byte
+  val LENGTH=12 //Byte
 }
-class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:Array[Byte]=>Unit) {
-  val states=Array.fill(8){new Array[Int](256)}
+class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:(Int, Array[Byte])=>Unit) {
+
+  val preambleLen=7
+  val states=Array.fill(preambleLen){new Array[Int](256)}
   states(0)(0x7f)=1
   states(1)(0x7f)=1
   states(1)(0xff)=2
@@ -19,18 +21,18 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
   states(6)(0x7f)=1
   states(6)(0x80)=7
   states(6)(0x7f)=1
-  states(7)(0x00)=8
 
-  val endState=8
+  val endState=7
 
-  val preambleLen=8
   val buffer=new Array[Byte](outLen+preambleLen+1)
   var bufferPtr=0
 
   val headerBuffer=new Array[Int](5)
   var headerPtr = -1
-
   var pktLen=0
+
+  var byteId=0
+
   def detectHeader(sig:Array[Byte])={
     var i=0
     var state=0
@@ -42,7 +44,7 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
           val seq=headerBuffer(0)
           val ts=(headerBuffer(1)|(headerBuffer(2)<<8)|(headerBuffer(3)<<16)|(headerBuffer(4)<<24))
           val lastPktLen=pktLen
-          headerCallback(Header(seq, ts, lastPktLen))
+          headerCallback(Header(seq, ts, lastPktLen, byteId))
           pktLen=0
           headerPtr = -1
         }
@@ -50,6 +52,7 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
         pktLen+=1
         buffer(bufferPtr)=sig(i)
         bufferPtr+=1
+        byteId+=1
         state = states(state)(sig(i) & 0xff)
         if (state == endState) {
           //preamble detected
@@ -57,9 +60,10 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
           state = 0
           pktLen-=preambleLen
           bufferPtr-=preambleLen
+          byteId-=preambleLen
         }
         if(bufferPtr==buffer.length){
-          packetCallback(buffer.slice(0, outLen))
+          packetCallback(byteId, buffer.slice(0, outLen))
           Array.copy(buffer, outLen, buffer, 0, preambleLen+1)
           bufferPtr=preambleLen+1
         }

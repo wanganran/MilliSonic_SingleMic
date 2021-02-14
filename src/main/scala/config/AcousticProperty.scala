@@ -29,6 +29,8 @@ object AcousticProperty {
 
   val TRANSITION = FMCW_CHIRP_DURATION_SAMPLE/8
 
+  val CONCURRENT_TX=2
+
   val FMCW_WINDOW_RATIO=0.8f
   val FMCW_WINDOW_OFFSET_RATIO=0.1f
 
