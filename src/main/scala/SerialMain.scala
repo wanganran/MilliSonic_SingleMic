@@ -1,6 +1,5 @@
-import java.io.FileInputStream
+import java.io.{FileInputStream, FileWriter}
 import java.util.concurrent.{ArrayBlockingQueue, BlockingQueue}
-
 import FMCW.{FMCWFilter, FMCWTrack}
 import blocks.{QuadSeparator, QuadSynchronization, SignalGenerator}
 import com.fazecast.jSerialComm._
@@ -78,6 +77,10 @@ object SerialMain extends App {
   val clockSync=new ClockSync()
   val trackThread = new Thread(() => {
     var first = true
+
+    //test output
+    val fileout=new FileWriter("data/raw.txt")
+
     while (!stop) {
       val data = dataBuff.take()
       if (first) {
@@ -85,6 +88,12 @@ object SerialMain extends App {
         first = false
       }
       else {
+        //test output
+        for(d<-data)
+          fileout.write(d.toString()+"\t")
+        fileout.flush()
+
+
         val sepres = seperator.input(data, 0, 0)
         val phres = for (i <- 0 until 4) yield {
           fmcwFilters(i).input(sepres(i), clockSync.getDrift())
@@ -107,7 +116,7 @@ object SerialMain extends App {
   val pkt=new Array[Float](AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE)
   val headerExtraction=new HeaderExtraction(buffer.length,{h=>clockSync.inputHeader(h)}, {data=>
     if(clockSync.ready()) {
-      val arr = utils.shortDeserialize(buffer).map(_ / 32768f)
+      val arr = utils.shortDeserialize(data).map(_ / 32768f)
       if (off < 0) {
         sync.input(arr) match {
           case Some((snr, idx)) =>

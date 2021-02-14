@@ -5,6 +5,8 @@ import utils.{IQ, int}
 import org.jtransforms.fft.FloatFFT_1D
 import utils.Conv
 
+import java.io.{FileOutputStream, FileWriter}
+
 class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
   private val freqs = Array.range(0, AcousticProperty.SINARR_FREQ_NUM).map { i =>
     AcousticProperty.SINARR_FREQ_MIN + i * AcousticProperty.SINARR_FREQ_GAP
@@ -32,6 +34,7 @@ class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
     lastSig = sig
   }
 
+  var outputted=0
   //return quad float sig array
   def input(sig: Array[Float], id: Int, offset: Int): Array[Array[Float]] = {
 
@@ -49,6 +52,15 @@ class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
       }
       fft.realInverse(sigPhase, false)
 
+      //test output
+      if(outputted<4) {
+        outputted += 1
+        val fileout = new FileWriter("data/testdata" + i.toString() + ".txt")
+        for (j <- 0 until newSig.length)
+          fileout.write(sigPhase(j).toString() + "\t")
+        fileout.close()
+      }
+      //end test output
 
       for (j <- 0 until newSig.length) {
         newSig(j) = sigPhase(j) * window((j + offset + window.length) % window.length)
