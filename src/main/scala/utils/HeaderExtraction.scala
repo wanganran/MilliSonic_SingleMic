@@ -3,8 +3,11 @@ package utils
 case class Header(seq:Int, timestamp:Int, lastPacketLen:Int, byteIndex:Int)
 object Header{
   val LENGTH=12 //Byte
+  val DEFAULT_PKT_LEN=2048
 }
 class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:(Int, Array[Byte])=>Unit) {
+  // packetCallback: returns the number of bytes to skip
+  assert(Header.DEFAULT_PKT_LEN<outLen)
 
   val preambleLen=7
   val states=Array.fill(preambleLen){new Array[Int](256)}
@@ -33,6 +36,9 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
 
   var byteId=0
 
+  var lastHeaderId = -1
+  var corrupted = false
+
   def detectHeader(sig:Array[Byte])={
     var i=0
     var state=0
@@ -41,12 +47,35 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
         headerBuffer(headerPtr)=(sig(i) & 0xff)
         headerPtr+=1
         if(headerPtr==headerBuffer.length){
+          // header found
           val seq=headerBuffer(0)
           val ts=(headerBuffer(1)|(headerBuffer(2)<<8)|(headerBuffer(3)<<16)|(headerBuffer(4)<<24))
           val lastPktLen=pktLen
           headerCallback(Header(seq, ts, lastPktLen, byteId))
           pktLen=0
           headerPtr = -1
+
+          //check if missed packet
+          if(lastHeaderId>=0 && (seq-lastHeaderId+256)%256!=1){
+            corrupted=true
+            val diff=(seq-lastHeaderId+256)%256
+            //calc diff and skip byteId
+            var skipped=(diff-1)*Header.DEFAULT_PKT_LEN
+            while(skipped!=0){
+              val next=buffer.length-bufferPtr
+              if(next>skipped) {
+                bufferPtr+=skipped
+                byteId+=skipped
+                skipped=0
+              } else {
+                byteId+=next
+                packetCallback(byteId-buffer.length, null)
+                bufferPtr=preambleLen+1
+                skipped-=next
+                if(skipped==0) corrupted=false
+              }
+            }
+          }
         }
       } else {
         pktLen+=1
@@ -63,9 +92,10 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
           byteId-=preambleLen
         }
         if(bufferPtr==buffer.length){
-          packetCallback(byteId, buffer.slice(0, outLen))
+          packetCallback(byteId-buffer.length, if(corrupted) null else buffer.slice(0, outLen))
           Array.copy(buffer, outLen, buffer, 0, preambleLen+1)
           bufferPtr=preambleLen+1
+          corrupted=false
         }
       }
       i+=1

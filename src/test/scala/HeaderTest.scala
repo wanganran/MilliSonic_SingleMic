@@ -18,7 +18,7 @@ object HeaderTest extends App {
   var sigptr=0
   val headerExtraction=new HeaderExtraction(600, {h:Header=>
       print(h)
-    }, {d:Array[Byte]=>
+    }, {(idx, d:Array[Byte])=>
     print(d.length)
       for(i<-0 until d.length) {
         if(sig(sigptr)!=d(i)) print("error @ "+i.toString())

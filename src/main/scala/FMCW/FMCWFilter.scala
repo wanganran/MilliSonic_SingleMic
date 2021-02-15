@@ -215,4 +215,14 @@ class FMCWFilter(timeOffset:Float) {
     println("currentDt "+currentDt+ " " + (DRIFTLIMIT.toFloat/AcousticProperty.SR)+ " "+phases(WIDTH))
     FMCWFilter.PhaseResult(phases, freqUp)
   }
+  def skip(clockRatio:Float): Unit ={
+    currentDt+=clockRatio*AcousticProperty.FMCW_CHIRP_DURATION
+    if(currentDt>DRIFTLIMIT.toFloat/AcousticProperty.SR){
+      currentDt-=DRIFTLIMIT.toFloat/AcousticProperty.SR
+      sampOffset+=DRIFTLIMIT
+    } else if(currentDt< -DRIFTLIMIT.toFloat/AcousticProperty.SR){
+      currentDt+=DRIFTLIMIT.toFloat/AcousticProperty.SR
+      sampOffset-=DRIFTLIMIT
+    }
+  }
 }
