@@ -1,5 +1,7 @@
 import java.io.{FileInputStream, FileWriter}
+import java.util.Scanner
 import java.util.concurrent.{ArrayBlockingQueue, BlockingQueue}
+
 import FMCW.{FMCWFilter, FMCWTrack}
 import blocks.{QuadSeparator, QuadSynchronization, SignalGenerator}
 import com.fazecast.jSerialComm._
@@ -28,7 +30,20 @@ object SerialMain extends App {
 
   val input=if(args(0).equals("serial")) InputAdapter(true, args(1)) else InputAdapter(false, args(1))
   //val input=InputAdapter(true, args(0))
-
+  if(args.length>2){
+    val serialSpeaker=SerialPort.getCommPort(args(2))
+    serialSpeaker.openPort()
+    serialSpeaker.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, 0,0)
+    val speakerThread=new Thread(()=>{
+      val stream=new Scanner(serialSpeaker.getInputStream())
+      while(true){
+        if(stream.hasNextLine()) {
+          val clock = stream.nextLine().trim().toInt // microseconds per 50k samples
+          clockSync.inputSpeaker(clock)
+        }
+      }
+    })
+  }
 
 
   val dataBuff = new ArrayBlockingQueue[Array[Float]](100)
@@ -57,6 +72,7 @@ object SerialMain extends App {
 
     private def mod_diff(a:Int, b:Int, mod:Int)=if(a-b >= -mod/2 && a-b <= mod/2) a-b else if(a-b < -mod/2) a-b+mod else a-b-mod
 
+    var microPerSecond=List[Float]()
 
     def inputHeader(h:Header): Unit ={
       if(lastSeq>=0 && h.seq==(lastSeq+1)%256){
@@ -72,10 +88,16 @@ object SerialMain extends App {
         lastTs=h.timestamp
       }
     }
+    def inputSpeaker(t:Int): Unit ={
+      microPerSecond:+=t
+      if(microPerSecond.length==bufferSize)
+        microPerSecond=microPerSecond.tail
+    }
     def getDrift()={
       if(!ready()) throw new IllegalArgumentException("Not enough time sync info accumulated")
       val avg=timePerSamples.sorted.slice(1, bufferSize-1).sum/(bufferSize-2)
-      avg/CLOCK_PER_SAMPLE-1
+      val micro=microPerSecond.last/1e6f
+      avg/(CLOCK_PER_SAMPLE-1)*micro
     }
 
   }
