@@ -31,18 +31,22 @@ object SerialMain extends App {
   val input=if(args(0).equals("serial")) InputAdapter(true, args(1)) else InputAdapter(false, args(1))
   //val input=InputAdapter(true, args(0))
   if(args.length>2){
-    val serialSpeaker=SerialPort.getCommPort(args(2))
-    serialSpeaker.openPort()
-    serialSpeaker.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, 0,0)
-    val speakerThread=new Thread(()=>{
-      val stream=new Scanner(serialSpeaker.getInputStream())
-      while(true){
-        if(stream.hasNextLine()) {
-          val clock = stream.nextLine().trim().toInt // microseconds per 50k samples
-          clockSync.inputSpeaker(clock)
+    if(args(2).forall(_.isDigit)){
+      clockSync.inputSpeaker(args(2).toInt)
+    } else {
+      val serialSpeaker = SerialPort.getCommPort(args(2))
+      serialSpeaker.openPort()
+      serialSpeaker.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, 0, 0)
+      val speakerThread = new Thread(() => {
+        val stream = new Scanner(serialSpeaker.getInputStream())
+        while (true) {
+          if (stream.hasNextLine()) {
+            val clock = stream.nextLine().trim().toInt // microseconds per 50k samples
+            clockSync.inputSpeaker(clock)
+          }
         }
-      }
-    })
+      })
+    }
   }
 
 
@@ -96,10 +100,9 @@ object SerialMain extends App {
     def getDrift()={
       if(!ready()) throw new IllegalArgumentException("Not enough time sync info accumulated")
       val avg=timePerSamples.sorted.slice(1, bufferSize-1).sum/(bufferSize-2)
-      val micro=microPerSecond.last/1e6f
+      val micro=if(microPerSecond.length>0) microPerSecond.last/1e6f else 1
       avg/(CLOCK_PER_SAMPLE-1)*micro
     }
-
   }
 
   val clockSync=new ClockSync()
