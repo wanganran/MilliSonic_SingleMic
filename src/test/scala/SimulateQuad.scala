@@ -61,7 +61,6 @@ object SimulateQuad extends App {
     //println(sig.length)
     val sepres = separator.input(
       sig,
-      0,
       AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE / 10
     )
     val phases= for (i <- 0 until 4) yield {

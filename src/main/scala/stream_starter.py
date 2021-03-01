@@ -9,7 +9,8 @@ import numpy as np
 import pdb
 import time
 
-btAddress = "CA:A1:E5:68:C7:DC"
+# btAddress = "CA:A1:E5:68:C7:DC"
+btAddress="D0:7B:4A:C9:AB:01"
 
 # i.e: python data_logger.py <fs>
 if __name__ == '__main__':

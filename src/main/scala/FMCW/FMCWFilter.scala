@@ -7,6 +7,8 @@ import utils.argmin
 import utils.getAngle
 import utils.int
 
+import java.io.FileWriter
+
 object FMCWFilter{
   abstract class FMCWResult
   case class PhaseResult(phases:Array[Float], freqEst:Float) extends FMCWResult{
@@ -33,6 +35,12 @@ class FMCWFilter(timeOffset:Float) {
 
   private val freqMin=int((AcousticProperty.SINARR_FREQ_MIN-1000)*AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE/AcousticProperty.SR)
   private val freqMax=int((AcousticProperty.SINARR_FREQ_MAX+1000)*AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE/AcousticProperty.SR)
+  private var id=0
+
+
+  def setId(id:Int): Unit ={
+    this.id=id
+  }
 
   private def generateUpchirpI(dt:Float, clockRatio:Float)={
     val A=(AcousticProperty.SINARR_FREQ_MAX-AcousticProperty.SINARR_FREQ_MIN)/AcousticProperty.FMCW_CHIRP_DURATION
@@ -98,6 +106,8 @@ class FMCWFilter(timeOffset:Float) {
 
   private var sampOffset=0
 
+  private var outputted=0
+
   private def modx(x:Int, m:Int):Int=if(x>=0) x%m else modx(x+m,m)
   //return (raw_phases, raw_freq, distance (in s), velocity (relative to speed of sound))
   private def doFMCWFilter(chirpI:Array[Float], chirpQ:Array[Float], realSig:Array[Float], begin:Int)= {
@@ -116,7 +126,14 @@ class FMCWFilter(timeOffset:Float) {
       for (i <- 1 until WINDOWSIZE)
         freqs(i) = freqs(i*2) * freqs(i*2) + freqs(i*2+1) * freqs(i*2+1)
 
-      
+
+      //test
+      val fileout = new FileWriter("data/fmcwdata"+id.toString()+"." + outputted.toString() + ".txt")
+      for (j <- 0 until WINDOWSIZE)
+        fileout.write(freqs(j).toString() + "\t")
+      fileout.close()
+      outputted += 1
+
       /*for(i<-0 until WINDOWSIZE)
         print(freqs(i)+"\t") 
       println()
@@ -126,6 +143,20 @@ class FMCWFilter(timeOffset:Float) {
       lastPeak = Some(freqMax)
       //println(freqMax)
     }
+
+    //test
+    val copyBuffer = new Array[Float](decodeBuffer.length)
+    Array.copy(decodeBuffer, 0, copyBuffer, 0, decodeBuffer.length)
+    val freqs = convo.fftComplexKernel(copyBuffer)
+    for (i <- 1 until WINDOWSIZE)
+      freqs(i) = freqs(i*2) * freqs(i*2) + freqs(i*2+1) * freqs(i*2+1)
+    val fileout = new FileWriter("data/fmcwdata"+id.toString()+"." + outputted.toString() + ".txt")
+    for (j <- 0 until WINDOWSIZE)
+      fileout.write(freqs(j).toString() + "\t")
+    fileout.close()
+    outputted += 1
+
+
 
     val kernel = buildKernel(lastPeak.get)
     convo.fftComplexKernel(kernel)
@@ -143,9 +174,6 @@ class FMCWFilter(timeOffset:Float) {
     for(i<-WIDTH until WINDOWSIZE-WIDTH){
       phaseBuffer(i)=decodeBuffer(i*2)*decodeBuffer(i*2)+decodeBuffer(i*2+1)*decodeBuffer(i*2+1)
     }
-
-    val lowid=argmin(phaseBuffer, WIDTH+LOWNEIGHBOR, WINDOWSIZE-WIDTH*2-LOWNEIGHBOR*2)
-
 
 
     for (i <- WIDTH until WINDOWSIZE - WIDTH) {

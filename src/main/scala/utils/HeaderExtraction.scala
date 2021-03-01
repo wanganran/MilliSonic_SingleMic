@@ -3,7 +3,7 @@ package utils
 case class Header(seq:Int, timestamp:Int, lastPacketLen:Int, byteIndex:Int)
 object Header{
   val LENGTH=12 //Byte
-  val DEFAULT_PKT_LEN=2048
+  val DEFAULT_PKT_LEN=1024
 }
 class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:(Int, Array[Byte])=>Unit) {
   // packetCallback: returns the number of bytes to skip
@@ -39,9 +39,9 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
   var lastHeaderId = -1
   var corrupted = false
 
+  var state=0
   def detectHeader(sig:Array[Byte])={
     var i=0
-    var state=0
     while(i<sig.length){
       if(headerPtr>=0){
         headerBuffer(headerPtr)=(sig(i) & 0xff)
@@ -76,6 +76,7 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
               }
             }
           }
+          lastHeaderId=seq
         }
       } else {
         pktLen+=1

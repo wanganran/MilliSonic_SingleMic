@@ -37,8 +37,8 @@ class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
 
   var outputted=0
   //return quad float sig array
-  def input(sig: Array[Float], id: Int, offset: Int): Array[Array[Float]] = {
-
+  def input(sig: Array[Float], offset: Int): Array[Array[Float]] = {
+    outputted += 1
     val newSig = new Array[Float](AcousticProperty.SINARR_DURATION)
     val result = for (i <- 0 until AcousticProperty.CONCURRENT_TX) yield {
       val currSig = if (i == 0) lastSig else lastSig.slice(quarter * i, lastSig.length) ++ sig.slice(0, quarter * i)
@@ -47,16 +47,15 @@ class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
         val af = int(f / AcousticProperty.SINARR_FREQ_GAP)
         val real = sigPhase(af * 2)
         val imag = sigPhase(af * 2 + 1)
-        val delayed = IQ.fromIQ(real, imag).shift(-phaseShiftFunc(id, f))
+        val delayed = IQ.fromIQ(real, imag).shift(-phaseShiftFunc(0, f))
         sigPhase(af * 2) = delayed.getI
         sigPhase(af * 2 + 1) = delayed.getQ
       }
       fft.realInverse(sigPhase, false)
 
       //test output
-      if(outputted<4) {
-        outputted += 1
-        val fileout = new FileWriter("data/testdata" + i.toString() + ".txt")
+      if(true) {
+        val fileout = new FileWriter("data/testdata"+i.toString()+"." + outputted.toString() + ".txt")
         for (j <- 0 until newSig.length)
           fileout.write(sigPhase(j).toString() + "\t")
         fileout.close()
@@ -73,7 +72,7 @@ class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
           val real = newSig(af * 2)
           val imag = newSig(af * 2 + 1)
           val f = af * AcousticProperty.SINARR_FREQ_GAP
-          val delayed = IQ.fromIQ(real, imag).shift(phaseShiftFunc(id, f))
+          val delayed = IQ.fromIQ(real, imag).shift(phaseShiftFunc(0, f))
           newSig(af * 2) = delayed.getI
           newSig(af * 2 + 1) = delayed.getQ
         }
