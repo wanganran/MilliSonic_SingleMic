@@ -4,7 +4,7 @@
 #include <SD.h>
 #include <SerialFlash.h>
 
-#include "AudioSampleTeensy.h"
+#include "chirp.h"
 
 const int PIN_INT=33;
 
