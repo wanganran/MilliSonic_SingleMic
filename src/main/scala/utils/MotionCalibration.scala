@@ -23,6 +23,8 @@ class MotionCalibration (xGap:Float, caliDuration:Float, nonMotionDuration:Float
           n+=1
       }
     }
+    meanx/=n
+    meany/=n
     for(i<-0 until motionSeq.length) {
       motionSeq(i) match {
         case Some(x) =>
@@ -48,14 +50,11 @@ class MotionCalibration (xGap:Float, caliDuration:Float, nonMotionDuration:Float
           motionSeq :+= measuredDistance
           if (motionSeq.flatten.size == caliSeqLen) {
             //calculate drift now
-            val (slope,_)=fitLine() // m/s
+            val (_,slope)=fitLine() // m/s
             val drift=slope/AcousticProperty.SOUND_SPEED //s/s
-            caliCallback(drift)
+            caliCallback(-drift)
             motionSeq = List[Option[Float]]()
             state = State.stable
-          } else {
-            //ignore, wait for next
-            motionSeq = motionSeq.tail
           }
         } else {
           motionSeq = List[Option[Float]]()
@@ -77,9 +76,9 @@ class MotionCalibration (xGap:Float, caliDuration:Float, nonMotionDuration:Float
         }
       case State.restable =>
         if (motion) {
-          val (slope,_)=fitLine() // m/s
+          val (_,slope)=fitLine() // m/s
           val drift=slope/AcousticProperty.SOUND_SPEED //s/s
-          caliCallback(drift)
+          caliCallback(-drift)
           motionSeq = List[Option[Float]]()
           state = State.mobile
         } else {

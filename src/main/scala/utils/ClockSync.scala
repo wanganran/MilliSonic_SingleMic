@@ -18,7 +18,10 @@ class ClockSync (alpha:Float, beta:Float){
   var motionCalibration=new MotionCalibration(AcousticProperty.FMCW_CHIRP_DURATION,
     AcousticProperty.CALIBRATION_DURATION,
     AcousticProperty.RESTABLE_DURATION, drift=>
-    if(currentDrift.isEmpty) currentDrift=Some(drift) else currentDrift=Some(currentDrift.get*alpha+drift*(1-alpha))
+    if(currentDrift.isEmpty)
+      currentDrift=Some(drift+AcousticProperty.DEFAULT_DRIFT)
+    else
+      currentDrift=Some(currentDrift.get+drift*(1-alpha))
   )
 
   var lastSeq = -1
