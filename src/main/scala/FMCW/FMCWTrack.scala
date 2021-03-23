@@ -13,7 +13,8 @@ class FMCWTrack {
   private val QUARTER2=AcousticProperty.FMCW_WINDOW_DURATION_SAMPLE/2
   private val QUARTER3=3*AcousticProperty.FMCW_WINDOW_DURATION_SAMPLE/4
 
-  private val OFFSET_SMOOTH=0.8f
+  private var tmOffsets=new Array[Float](micConfig.length)
+  //private val OFFSET_SMOOTH=0.8f
 
   case class PosResult(avgToa:Float, velocity:Float){
     def getDistance()=avgToa*AcousticProperty.SOUND_SPEED
@@ -157,6 +158,10 @@ class FMCWTrack {
     (xangles.sum/xangles.size, yangles.sum/yangles.size)
   }
 
+  def adjustTmOffset(lastTmResult:Array[Float], calibration:Array[Float]): Unit = {
+    for (i <- 0 until micConfig.length)
+      tmOffsets(i) = lastTmResult(i) - calibration(i)
+  }
 
 
   def getTm(phases:Array[Array[Float]])= {
@@ -169,8 +174,9 @@ class FMCWTrack {
       tms.sum/tms.size
     }
 
+
     //get the accurate distance estimate
-    val tms = phases.zip(states).map { case (phase, state) =>
+    val tms = phases.zip(states).zip(tmOffsets).map { case ((phase, state), tmOffset) =>
       if (!state.inited) {
         val (estFreq, initPhase) = estimateFreqInitPhase(phase)
         val estPhase = estimatePhaseGivenFreq(estFreq, 0)
@@ -190,7 +196,7 @@ class FMCWTrack {
         state.lastStartPhase=phase(QUARTER1)-initPhase+estPhase
         state.lastEndPhase=phase(QUARTER3)-initPhase+estPhase
 
-        PosResult(tmLast, 0f)
+        PosResult(tmLast-tmOffset, 0f)
 
       } else {
         //first estimate start phase
@@ -224,7 +230,7 @@ class FMCWTrack {
         state.lastEndTm = estTmLast
 
         val tm=getAvgTm(state, actPhDelta, phase)
-        PosResult(tm, estVel)
+        PosResult(tm-tmOffset, estVel)
       }
     }
 

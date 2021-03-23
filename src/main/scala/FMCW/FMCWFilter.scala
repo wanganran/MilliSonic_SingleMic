@@ -207,18 +207,18 @@ class FMCWFilter(timeOffset:Float) {
 
   var time=System.currentTimeMillis()
   
-  var currentDt=0f
+  var currentDt=0d
   var first=true
 
   //realSig is disposable
   //return (phase diff array, avg freq, dist, vel)
-  def input(realSig:Array[Float], clockRatio:Float)={
+  def input(realSig:Array[Float], clockRatio:Double)={
     if(first){
       currentDt=timeOffset*clockRatio
 
     }
-    val upchirpI=generateUpchirpI(currentDt, clockRatio)
-    val upchirpQ=generateUpchirpQ(currentDt, clockRatio)
+    val upchirpI=generateUpchirpI(currentDt.toFloat, clockRatio.toFloat)
+    val upchirpQ=generateUpchirpQ(currentDt.toFloat, clockRatio.toFloat)
 
     if(first) {
       val (_, prevFreqUp)=doFMCWFilter(upchirpI, upchirpQ, realSig, GAPBEGIN)
@@ -243,7 +243,7 @@ class FMCWFilter(timeOffset:Float) {
     println("currentDt "+currentDt+ " " + (DRIFTLIMIT.toFloat/AcousticProperty.SR)+ " "+phases(WIDTH))
     FMCWFilter.PhaseResult(phases, freqUp)
   }
-  def skip(clockRatio:Float): Unit ={
+  def skip(clockRatio:Double): Unit ={
     currentDt+=clockRatio*AcousticProperty.FMCW_CHIRP_DURATION
     if(currentDt>DRIFTLIMIT.toFloat/AcousticProperty.SR){
       currentDt-=DRIFTLIMIT.toFloat/AcousticProperty.SR
@@ -252,5 +252,10 @@ class FMCWFilter(timeOffset:Float) {
       currentDt+=DRIFTLIMIT.toFloat/AcousticProperty.SR
       sampOffset-=DRIFTLIMIT
     }
+  }
+
+  //return drift amount in s
+  def getTotalDriftTime()={
+    currentDt+sampOffset/AcousticProperty.SR
   }
 }

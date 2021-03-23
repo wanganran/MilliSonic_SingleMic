@@ -22,6 +22,19 @@ object AcousticProperty {
   val SINARR_FREQ_NUM = int((SINARR_FREQ_MAX - SINARR_FREQ_MIN) / SINARR_FREQ_GAP) + 1
   val SINARR_DURATION = int(SR / SINARR_FREQ_GAP)
 
+  //speaker board sync freq
+  val SPEAKER_CLOCK_INTERVAL=1f //once per second
+
+  //default drift
+  val DEFAULT_DRIFT = -0.000012619 //1.000000381*0.999987
+
+  //motion detection
+  val CALIBRATION_DURATION=1f
+  val RESTABLE_DURATION=5f
+
+  //drift correction
+  val SYNC_ALPHA=0.99f
+  val SYNC_BETA=1f
 
   //FMCW cannot run with duration_gap
   val FMCW_CHIRP_DURATION_SAMPLE = SINARR_DURATION
@@ -29,7 +42,7 @@ object AcousticProperty {
 
   val TRANSITION = FMCW_CHIRP_DURATION_SAMPLE/8
 
-  val CONCURRENT_TX=2
+  val CONCURRENT_TX=4
 
   val FMCW_WINDOW_RATIO=0.8f
   val FMCW_WINDOW_OFFSET_RATIO=0.1f

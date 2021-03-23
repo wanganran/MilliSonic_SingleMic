@@ -1,15 +1,25 @@
 package utils
 
-case class Header(seq:Int, timestamp:Int, lastPacketLen:Int, byteIndex:Int)
-object Header{
-  val LENGTH=12 //Byte
-  val DEFAULT_PKT_LEN=1024
+case class Header(seq:Int, timestamp:Int, lastPacketLen:Int, byteIndex:Int){
+  var accData:(Boolean, Short, Short, Short)=(true, 0, 0, 0)
 }
-class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:(Int, Array[Byte])=>Unit) {
+
+object Header{
+  val LENGTH=20 //Byte
+  val DEFAULT_PKT_LEN=1024
+
+  def parseAcc(header:Array[Int], offset:Int)={
+    val move=(header(offset)!=0)
+    val headerBuf=header.slice(offset+1, offset+7).map(_.toByte)
+    val m=utils.shortDeserialize(headerBuf)
+    (move, m(0), m(1), m(2))
+  }
+}
+class HeaderExtraction[T] (outLen:Int, headerCallback:Header=>T, packetCallback:(Int, Array[Byte], Option[T])=>Unit) {
   // packetCallback: returns the number of bytes to skip
   assert(Header.DEFAULT_PKT_LEN<outLen)
 
-  val preambleLen=7
+  val preambleLen=8
   val states=Array.fill(preambleLen){new Array[Int](256)}
   states(0)(0x7f)=1
   states(1)(0x7f)=1
@@ -24,13 +34,15 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
   states(6)(0x7f)=1
   states(6)(0x80)=7
   states(6)(0x7f)=1
+  states(7)(0x00)=8
+  states(7)(0x7f)=1
 
-  val endState=7
+  val endState=preambleLen
 
   val buffer=new Array[Byte](outLen+preambleLen+1)
   var bufferPtr=0
 
-  val headerBuffer=new Array[Int](5)
+  val headerBuffer=new Array[Int](Header.LENGTH-preambleLen)
   var headerPtr = -1
   var pktLen=0
 
@@ -38,6 +50,8 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
 
   var lastHeaderId = -1
   var corrupted = false
+
+  var currentHeaderInfo:Option[T]=None
 
   var state=0
   def detectHeader(sig:Array[Byte])={
@@ -51,7 +65,11 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
           val seq=headerBuffer(0)
           val ts=(headerBuffer(1)|(headerBuffer(2)<<8)|(headerBuffer(3)<<16)|(headerBuffer(4)<<24))
           val lastPktLen=pktLen
-          headerCallback(Header(seq, ts, lastPktLen, byteId))
+
+          val acc=Header.parseAcc(headerBuffer, 5)
+          val header=Header(seq, ts, lastPktLen, byteId)
+          header.accData=acc
+          currentHeaderInfo=Some(headerCallback(header))
           pktLen=0
           headerPtr = -1
 
@@ -69,7 +87,7 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
                 skipped=0
               } else {
                 byteId+=next
-                packetCallback(byteId-buffer.length, null)
+                packetCallback(byteId-buffer.length, null, currentHeaderInfo)
                 bufferPtr=preambleLen+1
                 skipped-=next
                 if(skipped==0) corrupted=false
@@ -93,7 +111,7 @@ class HeaderExtraction (outLen:Int, headerCallback:Header=>Unit, packetCallback:
           byteId-=preambleLen
         }
         if(bufferPtr==buffer.length){
-          packetCallback(byteId-buffer.length, if(corrupted) null else buffer.slice(0, outLen))
+          packetCallback(byteId-buffer.length, if(corrupted) null else buffer.slice(0, outLen), currentHeaderInfo)
           Array.copy(buffer, outLen, buffer, 0, preambleLen+1)
           bufferPtr=preambleLen+1
           corrupted=false
