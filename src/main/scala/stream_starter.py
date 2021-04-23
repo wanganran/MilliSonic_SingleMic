@@ -9,8 +9,11 @@ import numpy as np
 import pdb
 import time
 
-# btAddress = "CA:A1:E5:68:C7:DC"
-btAddress="D0:7B:4A:C9:AB:01"
+TS=True
+btAddress="CA:A1:E5:68:C7:DC"
+#btAddress="D0:7B:4A:C9:AB:01"
+#btAddress="F8:0E:C5:1E:C2:26"
+#btAddress="E2:6D:BF:ED:08:C7"
 
 # i.e: python data_logger.py <fs>
 if __name__ == '__main__':
@@ -43,13 +46,18 @@ if __name__ == '__main__':
     # Create output file
     f = open("output.bin","w+")
     trailingSample = None
+    if TS:
+        ser.write("ts on\n")
+        scriptIndex = 0
+    else:
+        ser.write("ts off\n")
+        time.sleep(.25)
+        scriptIndex = 0
 
-    ser.write("ts on\n")
-    scriptIndex = 0
     while True:
       data = str(ser.readline())
       data = data.strip()
-      if (scriptIndex == 0 and "Time sync started" in data):
+      if (scriptIndex == 0 and "Time sync" in data):
         ser.write("scan on\n")
         time.sleep(.25)
         scriptIndex += 1

@@ -29,13 +29,11 @@ class FIRFilter(val sampleRate: Int) {
     val sum = mask.sum
     for (i <- 0 until halfWind * 2 + 1) mask(i) /= sum
 
-    new Filter {
-      def apply(sig: Array[Float], lastSig: Array[Float], res: Array[Float]) {
-        FIR(sig, lastSig, sig.length, mask, 2 * halfWind + 1, res)
-        //remove dc
-        //val mean = res.sum / res.length
-        //for (i <- res.indices) res(i) -= mean
-      }
+    (sig: Array[Float], lastSig: Array[Float], res: Array[Float]) => {
+      FIR(sig, lastSig, sig.length, mask, 2 * halfWind + 1, res)
+      //remove dc
+      //val mean = res.sum / res.length
+      //for (i <- res.indices) res(i) -= mean
     }
   }
 

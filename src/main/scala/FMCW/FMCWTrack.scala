@@ -10,13 +10,11 @@ class FMCWTrack {
   private val horizontalPairs=micConfigWIdx.groupBy{case ((x,y), idx)=>x}.map{case (x, arr)=>(x, arr.sortBy{case ((_,y), _)=>y})}
 
   private val QUARTER1=AcousticProperty.FMCW_WINDOW_DURATION_SAMPLE/4
-  private val QUARTER2=AcousticProperty.FMCW_WINDOW_DURATION_SAMPLE/2
   private val QUARTER3=3*AcousticProperty.FMCW_WINDOW_DURATION_SAMPLE/4
 
   private var tmOffsets=new Array[Float](micConfig.length)
-  //private val OFFSET_SMOOTH=0.8f
 
-  case class PosResult(avgToa:Float, velocity:Float){
+  case class PosResult(avgToa:Float, velocity:Float, rawFreq:Float){
     def getDistance()=avgToa*AcousticProperty.SOUND_SPEED
     def getVelocity()=velocity*AcousticProperty.SOUND_SPEED
   }
@@ -35,21 +33,20 @@ class FMCWTrack {
   private class State{
     var velocity=0f //s/s
     var phaseOffset=0f
+    var resOffset=0f
     var lastEndTm=0f
     var inited=false
     var lastEndPhase=0f
     var lastStartPhase=0f
   }
 
-  private val MAXHISTORY=20
-
   private val states=Array.fill(micConfig.length)(new State())
-
 
   def reset(): Unit ={
     states.foreach{x=>
       x.velocity=0f
       x.phaseOffset=0f
+      x.resOffset=0f
       x.lastEndTm=0f
       x.inited=false
       x.lastEndPhase=0f
@@ -122,8 +119,8 @@ class FMCWTrack {
   //delta+relPh~absPh
   def get2piDelta(relPh:Float, absPh:Float, offset:Float)={
     val diff=absPh-relPh-offset
-    val mul=Math.round(diff/2/Math.PI.toFloat)
-    val newoffset=absPh-relPh-mul*2*Math.PI.toFloat
+    var mul=Math.round(diff/2/Math.PI.toFloat)
+    var newoffset=absPh-relPh-mul*2*Math.PI.toFloat
     (newoffset, mul*2*Math.PI.toFloat)
   }
 
@@ -163,6 +160,14 @@ class FMCWTrack {
       tmOffsets(i) = lastTmResult(i) - calibration(i)
   }
 
+  def fusePhase(pold:Float, pnew:Float, a:Float)={
+    if(pold>pnew+Math.PI){
+      (pold-Math.PI.toFloat*2)*a+(1-a)*pnew
+    } else if(pold<pnew-Math.PI){
+      (pold+Math.PI.toFloat*2)*a+(1-a)*pnew
+    } else
+      pold*a+(1-a)*pnew
+  }
 
   def getTm(phases:Array[Array[Float]])= {
 
@@ -183,20 +188,22 @@ class FMCWTrack {
         val phDiff = phaseDiff(estPhase, initPhase)
         state.inited = true
         state.phaseOffset = phDiff
-        //println("phdiff "+phDiff)
+        state.resOffset = 0
 
         val phLast = phase(QUARTER3) - initPhase + estPhase
         val tmLast = estimateTmGivenPhase(phLast, 0.75f)
 
         //test
-        val pht=estimatePhaseGivenTm(tmLast, 0.25f)
-        //println("test ph "+(phase(QUARTER1)-initPhase+estPhase)+" "+pht)
+        if(AcousticProperty.DEBUG) {
+          val pht = estimatePhaseGivenTm(tmLast, 0.25f)
+          println("test ph "+(phase(QUARTER1)-initPhase+estPhase)+" "+pht)
+        }
 
         state.lastEndTm = tmLast
         state.lastStartPhase=phase(QUARTER1)-initPhase+estPhase
         state.lastEndPhase=phase(QUARTER3)-initPhase+estPhase
 
-        PosResult(tmLast-tmOffset, 0f)
+        PosResult(tmLast-tmOffset, 0f, estFreq)
 
       } else {
         //first estimate start phase
@@ -204,33 +211,53 @@ class FMCWTrack {
         val estTmStart = state.lastEndTm + state.velocity * ti
         val estPhStart = estimatePhaseGivenTm(estTmStart, 0.25f)
         val actPhStart = phase(QUARTER1)
-        //println("ph " +(actPhStart+state.phaseOffset)+" "+estPhStart%(Math.PI*2))
-        val (newoffset, actPhDelta) = get2piDelta(actPhStart, estPhStart, state.phaseOffset)
-        //state.phaseOffset = state.phaseOffset * OFFSET_SMOOTH + newoffset * (1 - OFFSET_SMOOTH)
+        var (newoffset, actPhDelta) = get2piDelta(actPhStart, estPhStart, state.phaseOffset)
+        if(newoffset-state.resOffset>Math.PI){
+          state.resOffset=newoffset-2*Math.PI.toFloat
+          actPhDelta+=Math.PI.toFloat*2
+        } else if (state.resOffset-newoffset>Math.PI){
+          state.resOffset=newoffset+2*Math.PI.toFloat
+          actPhDelta-=Math.PI.toFloat*2
+        } else {
+          state.resOffset=newoffset
+        }
 
         val newStartPhase=actPhDelta+state.phaseOffset+phase(QUARTER1)
         val newEndPhase=actPhDelta+state.phaseOffset+phase(QUARTER3)
-        val diffstart=newStartPhase-state.lastStartPhase
-        val diffend=newEndPhase-state.lastEndPhase
+        val d=AcousticProperty.FMCW_CHIRP_DURATION
+        val predPhStart=state.lastStartPhase+state.velocity*d*AcousticProperty.SINARR_FREQ_MIN //approx
+        val predPhEnd=state.lastEndPhase+state.velocity*d*AcousticProperty.SINARR_FREQ_MIN //approx
+        val diffstart=newStartPhase-predPhStart
+        val diffend=newEndPhase-predPhEnd
 
-        if(Math.abs(diffstart-diffend)>1.5*Math.PI){
+        if (Math.abs(diffstart - diffend) > 1.5 * Math.PI) {
           //error happens, need interpolate
-          println("interpolated", newStartPhase, state.lastStartPhase, newEndPhase, state.lastEndPhase)
-          phase(QUARTER3)+=(Math.round((diffstart-diffend)/2/Math.PI)*2*Math.PI).toFloat
-          phase(QUARTER2)=(phase(QUARTER3)+phase(QUARTER1))/2
+          println("interpolated", newStartPhase, predPhStart, newEndPhase, predPhEnd, phase(QUARTER1), phase(QUARTER3))
 
+          phase(QUARTER1) -= (Math.round(diffstart / 2 / Math.PI) * 2 * Math.PI).toFloat
+          phase(QUARTER3) -= (Math.round(diffend / 2 / Math.PI) * 2 * Math.PI).toFloat
+
+        } else if (Math.abs(diffstart) > 1.5 * Math.PI && Math.abs(diffend) > 1.5 * Math.PI) {
+          //shifted due to wrong phase offset
+          println("shifted", newStartPhase, predPhStart, newEndPhase, predPhEnd)
+          phase(QUARTER1) -= (Math.round(diffstart / 2 / Math.PI) * 2 * Math.PI).toFloat
+          phase(QUARTER3) -= (Math.round(diffend / 2 / Math.PI) * 2 * Math.PI).toFloat
         }
+
         state.lastEndPhase=actPhDelta+state.phaseOffset+phase(QUARTER3)
         state.lastStartPhase=actPhDelta+state.phaseOffset+phase(QUARTER1)
 
         val estTmLast = estimateTmGivenPhase(actPhDelta + state.phaseOffset + phase(QUARTER3), 0.75f)
         val estVel = (estTmLast - state.lastEndTm) / AcousticProperty.FMCW_CHIRP_DURATION
+        val estFreq=estimateFreqGivenTm(estTmLast)// (phase(QUARTER3)-phase(QUARTER1))/(QUARTER3-QUARTER1)*AcousticProperty.FMCW_WINDOW_DURATION_SAMPLE/2/Math.PI.toFloat
 
         state.velocity = estVel
+        if(AcousticProperty.DEBUG)
+          println(state.lastEndTm+"\t"+estTmLast)
         state.lastEndTm = estTmLast
 
         val tm=getAvgTm(state, actPhDelta, phase)
-        PosResult(tm-tmOffset, estVel)
+        PosResult(tm-tmOffset, estVel, estFreq)
       }
     }
 

@@ -10,19 +10,21 @@ import java.io.FileWriter
 class ClockSync (alpha:Float, beta:Float){
   val CLOCK=16*1000*1000.0
   val CLOCK_PER_SAMPLE=CLOCK/AcousticProperty.SR
-  val CLOCK_PER_PACKET=int(CLOCK*Header.DEFAULT_PKT_LEN/2/AcousticProperty.SR)
+  val CLOCK_PER_PACKET=CLOCK*Header.DEFAULT_PKT_LEN/2/AcousticProperty.SR
 
   var currentDrift:Option[Double]=None
   var currentTimingDiff:Double=0f
 
   var motionCalibration=new MotionCalibration(AcousticProperty.FMCW_CHIRP_DURATION,
+    AcousticProperty.CALIBRATION_SKIP,
     AcousticProperty.CALIBRATION_DURATION,
-    AcousticProperty.RESTABLE_DURATION, drift=>
-    if(currentDrift.isEmpty)
-      currentDrift=Some(drift+AcousticProperty.DEFAULT_DRIFT)
-    else
-      currentDrift=Some(currentDrift.get+drift*(1-alpha))
-  )
+    AcousticProperty.RESTABLE_DURATION, drift=> {
+      if(AcousticProperty.DEBUG) println("drift update", drift)
+      if (currentDrift.isEmpty)
+        currentDrift = Some(drift + AcousticProperty.DEFAULT_DRIFT)
+      else
+        currentDrift = Some(currentDrift.get + drift * (1 - alpha))
+    })
 
   var lastSeq = -1
   var lastTs = -1
@@ -36,6 +38,7 @@ class ClockSync (alpha:Float, beta:Float){
 
   var accSpeakerClock=0
   var accSpeakerClockNum=0
+  var totalDuration=0l
 
   private var avgAdjustment=0d
 
@@ -54,7 +57,7 @@ class ClockSync (alpha:Float, beta:Float){
     }
 
     // update headers
-    val delta=Math.min(h.seq-lastSeq, h.seq+256-lastSeq)
+    val delta=if(h.seq-lastSeq<0)h.seq+256-lastSeq else h.seq-lastSeq
     val tsShouldbe=delta*CLOCK_PER_PACKET
     lastSeq=h.seq
     if(accTimestamp.isEmpty){
@@ -62,9 +65,11 @@ class ClockSync (alpha:Float, beta:Float){
       accTimestamp=Some(0)
     } else {
       val duration=h.timestamp-lastTs
-      val diff=duration-tsShouldbe
+      totalDuration+=duration
+      var diff=duration-tsShouldbe
+
       lastTs=h.timestamp
-      accTimestamp=Some(accTimestamp.get+diff)
+      accTimestamp=Some(accTimestamp.get+int(diff))
       accTimestampNum+=delta
     }
   }
@@ -77,7 +82,7 @@ class ClockSync (alpha:Float, beta:Float){
     motionCalibration.input(motion, avgDistance)
   }
 
-  private def getTotalDuration=accTimestamp.getOrElse(0)/CLOCK
+  private def getTotalDuration=totalDuration/CLOCK
 
   // acoustic drift
   def getDrift()= {
@@ -86,19 +91,18 @@ class ClockSync (alpha:Float, beta:Float){
   }
 
   //return the adjustment in second
-  //TODO: not tested
   def getAdjustment()={
     val adj = if (accTimestamp.nonEmpty) {
       val accDiff = accTimestamp.get / CLOCK
       val speakerCorrect = {
         if (accSpeakerClockNum > 0) {
           val durationScale = getTotalDuration / accSpeakerClockNum * AcousticProperty.SPEAKER_CLOCK_INTERVAL
-          val micro = accSpeakerClock.toFloat - 1e6f * AcousticProperty.SPEAKER_CLOCK_INTERVAL * accSpeakerClockNum
+          val micro = accSpeakerClock - 1e6d * AcousticProperty.SPEAKER_CLOCK_INTERVAL * accSpeakerClockNum
           val total = micro * durationScale
-          total / 1e6 // in second
+          total / 1e6d // in second
         } else 0
       }
-      accDiff + speakerCorrect
+      accDiff+speakerCorrect
     } else 0
     avgAdjustment = avgAdjustment * beta + (1 - beta) * adj
     avgAdjustment

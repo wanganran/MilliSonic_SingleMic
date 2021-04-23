@@ -3,7 +3,7 @@ package utils
 import config.AcousticProperty
 
 
-class MotionCalibration (xGap:Float, caliDuration:Float, nonMotionDuration:Float, caliCallback:Float=>Unit) {
+class MotionCalibration (xGap:Float, skipFirst:Int, caliDuration:Float, nonMotionDuration:Float, caliCallback:Float=>Unit) {
   var motionSeq=List[Option[Float]]()
   var nonMotionCounter=0
   val caliSeqLen=int(caliDuration/AcousticProperty.FMCW_CHIRP_DURATION)
@@ -48,7 +48,8 @@ class MotionCalibration (xGap:Float, caliDuration:Float, nonMotionDuration:Float
       case State.start =>
         if (!motion) {
           motionSeq :+= measuredDistance
-          if (motionSeq.flatten.size == caliSeqLen) {
+          if (motionSeq.flatten.size == caliSeqLen+skipFirst) {
+            motionSeq=motionSeq.slice(skipFirst, motionSeq.length)
             //calculate drift now
             val (_,slope)=fitLine() // m/s
             val drift=slope/AcousticProperty.SOUND_SPEED //s/s
@@ -57,7 +58,10 @@ class MotionCalibration (xGap:Float, caliDuration:Float, nonMotionDuration:Float
             state = State.stable
           }
         } else {
-          motionSeq = List[Option[Float]]()
+          if(motionSeq.flatten.nonEmpty) {
+            motionSeq = List[Option[Float]]()
+            state = State.mobile
+          }
         }
       case State.stable =>
         if (motion)
@@ -76,14 +80,14 @@ class MotionCalibration (xGap:Float, caliDuration:Float, nonMotionDuration:Float
         }
       case State.restable =>
         if (motion) {
-          val (_,slope)=fitLine() // m/s
-          val drift=slope/AcousticProperty.SOUND_SPEED //s/s
-          caliCallback(-drift)
           motionSeq = List[Option[Float]]()
           state = State.mobile
         } else {
           motionSeq :+= measuredDistance
           if (motionSeq.flatten.size == caliSeqLen) {
+            val (_,slope)=fitLine() // m/s
+            val drift=slope/AcousticProperty.SOUND_SPEED //s/s
+            caliCallback(-drift)
             motionSeq = List[Option[Float]]()
             state = State.stable
           }

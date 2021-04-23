@@ -6,6 +6,8 @@ import utils.{Position, int}
   * Created by anwang on 7/10/2017.
   */
 object AcousticProperty {
+  val DEBUG=false
+
   val SR = 50000
 
   val ARRAY_BUFFER_SIZE=100
@@ -18,23 +20,28 @@ object AcousticProperty {
 
   val SINARR_FREQ_GAP = 20f
 
+  val BLOCK_THRESHOLD=0.4f
 
   val SINARR_FREQ_NUM = int((SINARR_FREQ_MAX - SINARR_FREQ_MIN) / SINARR_FREQ_GAP) + 1
   val SINARR_DURATION = int(SR / SINARR_FREQ_GAP)
 
   //speaker board sync freq
   val SPEAKER_CLOCK_INTERVAL=1f //once per second
+  val SNR_THRESHOLD=15f
 
   //default drift
-  val DEFAULT_DRIFT = -0.000012619 //1.000000381*0.999987
+  val DEFAULT_DRIFT = -0.00000761 //1.000000381*0.999987
 
   //motion detection
+  val CALIBRATION_SKIP=2
   val CALIBRATION_DURATION=1f
   val RESTABLE_DURATION=5f
 
   //drift correction
-  val SYNC_ALPHA=0.99f
-  val SYNC_BETA=1f
+  val SYNC_ALPHA=0.1f
+  val SYNC_BETA=0f
+
+  val PREHEAT=10
 
   //FMCW cannot run with duration_gap
   val FMCW_CHIRP_DURATION_SAMPLE = SINARR_DURATION
@@ -45,7 +52,7 @@ object AcousticProperty {
   val CONCURRENT_TX=4
 
   val FMCW_WINDOW_RATIO=0.8f
-  val FMCW_WINDOW_OFFSET_RATIO=0.1f
+  val FMCW_WINDOW_OFFSET_RATIO=0.15f
 
   val FMCW_WINDOW_DURATION_SAMPLE = int(FMCW_CHIRP_DURATION_SAMPLE * FMCW_WINDOW_RATIO)
   val FMCW_WINDOW_OFFSET_SAMPLE = int(FMCW_CHIRP_DURATION_SAMPLE * FMCW_WINDOW_OFFSET_RATIO)

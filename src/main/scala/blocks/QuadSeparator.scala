@@ -1,13 +1,12 @@
 package blocks
 
 import config.AcousticProperty
-import utils.{IQ, int}
+import utils.{Conv, IQ, Logger, int}
 import org.jtransforms.fft.FloatFFT_1D
-import utils.Conv
 
 import java.io.{FileOutputStream, FileWriter}
 
-class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
+class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int, blockDetector: BlockDetector=null) {
   private val freqs = Array.range(0, AcousticProperty.SINARR_FREQ_NUM).map { i =>
     AcousticProperty.SINARR_FREQ_MIN + i * AcousticProperty.SINARR_FREQ_GAP
   }
@@ -15,6 +14,7 @@ class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
   private val conv = new Conv(AcousticProperty.SINARR_DURATION)
 
   private val quarter = AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE / (AcousticProperty.CONCURRENT_TX+1)
+
 
   def coswind(i: Float) = (Math.cos(i * Math.PI).toFloat + 1) / 2
 
@@ -54,7 +54,7 @@ class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
       fft.realInverse(sigPhase, false)
 
       //test output
-      if(true) {
+      if(AcousticProperty.DEBUG) {
         val fileout = new FileWriter("data/testdata"+i.toString()+"." + outputted.toString() + ".txt")
         for (j <- 0 until newSig.length)
           fileout.write(sigPhase(j).toString() + "\t")
@@ -62,9 +62,18 @@ class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int) {
       }
       //end test output
 
+
+
       for (j <- 0 until newSig.length) {
         newSig(j) = sigPhase(j) * window((j + offset + window.length) % window.length)
       }
+
+      // blockage check - use first channel
+      if(i==0) {
+        val blocked=blockDetector.get_blocked(newSig)
+        if(blocked) Logger.writeln("blocked")
+      }
+
       fft.realForward(newSig)
 
       for (af <- 0 until AcousticProperty.SINARR_DURATION / 2) {

@@ -2,6 +2,7 @@ package utils
 
 case class Header(seq:Int, timestamp:Int, lastPacketLen:Int, byteIndex:Int){
   var accData:(Boolean, Short, Short, Short)=(true, 0, 0, 0)
+  var speakerClk:Option[Int]=None
 }
 
 object Header{
@@ -65,7 +66,7 @@ class HeaderExtraction[T] (outLen:Int, headerCallback:Header=>T, packetCallback:
           val seq=headerBuffer(0)
           val ts=(headerBuffer(1)|(headerBuffer(2)<<8)|(headerBuffer(3)<<16)|(headerBuffer(4)<<24))
           val lastPktLen=pktLen
-
+          if(pktLen!=Header.DEFAULT_PKT_LEN)println("ERROR: pkt len mismatch "+pktLen)
           val acc=Header.parseAcc(headerBuffer, 5)
           val header=Header(seq, ts, lastPktLen, byteId)
           header.accData=acc
@@ -75,25 +76,30 @@ class HeaderExtraction[T] (outLen:Int, headerCallback:Header=>T, packetCallback:
 
           //check if missed packet
           if(lastHeaderId>=0 && (seq-lastHeaderId+256)%256!=1){
+            println("header mismatch:"+lastHeaderId+"\t"+seq)
             corrupted=true
             val diff=(seq-lastHeaderId+256)%256
             //calc diff and skip byteId
             var skipped=(diff-1)*Header.DEFAULT_PKT_LEN
             while(skipped!=0){
-              val next=buffer.length-bufferPtr
+              val next=outLen-bufferPtr
+              if(next<0)println("ERROR: buffer overflow")
               if(next>skipped) {
                 bufferPtr+=skipped
                 byteId+=skipped
                 skipped=0
               } else {
+                //println("test "+skipped+"\t"+buffer.length+"\t"+bufferPtr)
                 byteId+=next
-                packetCallback(byteId-buffer.length, null, currentHeaderInfo)
-                bufferPtr=preambleLen+1
+                packetCallback(byteId-outLen, null, currentHeaderInfo)
+                bufferPtr=0 //preambleLen+1
                 skipped-=next
                 if(skipped==0) corrupted=false
               }
             }
+            //println("test3 "+sig.length+"\t"+bufferPtr+"\t"+i)
           }
+          //else {println("header correct: "+seq)}
           lastHeaderId=seq
         }
       } else {
@@ -111,6 +117,7 @@ class HeaderExtraction[T] (outLen:Int, headerCallback:Header=>T, packetCallback:
           byteId-=preambleLen
         }
         if(bufferPtr==buffer.length){
+          //println("test2 "+"\t"+i)
           packetCallback(byteId-buffer.length, if(corrupted) null else buffer.slice(0, outLen), currentHeaderInfo)
           Array.copy(buffer, outLen, buffer, 0, preambleLen+1)
           bufferPtr=preambleLen+1

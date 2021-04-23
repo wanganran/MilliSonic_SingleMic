@@ -42,18 +42,18 @@ class FMCWFilter(timeOffset:Float) {
     this.id=id
   }
 
-  private def generateUpchirpI(dt:Float, clockRatio:Float)={
+  private def generateUpchirpI(dt:Double, clockRatio:Double)={
     val A=(AcousticProperty.SINARR_FREQ_MAX-AcousticProperty.SINARR_FREQ_MIN)/AcousticProperty.FMCW_CHIRP_DURATION
     Array.range(0, AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE).map{i=>
-      val t=(i.toDouble/AcousticProperty.SR+dt)*(1+clockRatio.toDouble)
+      val t=(i.toDouble/AcousticProperty.SR)*(1+clockRatio)+dt
       Math.cos(2*Math.PI*(AcousticProperty.SINARR_FREQ_MIN*t+A/2*t*t)).toFloat
     }
   }
 
-  private def generateUpchirpQ(dt:Float, clockRatio:Float)={
+  private def generateUpchirpQ(dt:Double, clockRatio:Double)={
     val A=(AcousticProperty.SINARR_FREQ_MAX-AcousticProperty.SINARR_FREQ_MIN)/AcousticProperty.FMCW_CHIRP_DURATION
     Array.range(0, AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE).map{i=>
-      val t=(i.toDouble/AcousticProperty.SR+dt)*(1+clockRatio.toDouble)
+      val t=(i.toDouble/AcousticProperty.SR)*(1+clockRatio)+dt
       -Math.cos(2*Math.PI*(AcousticProperty.SINARR_FREQ_MIN*t+A/2*t*t)+Math.PI/2).toFloat
     }
   }
@@ -77,28 +77,15 @@ class FMCWFilter(timeOffset:Float) {
 
   private val decodeBuffer=new Array[Float](WINDOWSIZE*2)
 
-  // obsolete
-  private def buildWindow(kernel:Array[Float]): Unit ={
-    for(i<-0 until WIDTH) {
-      val w = 0.53836f - 0.46164f * Math.cos(2 * Math.PI * i / WIDTH).toFloat
-      kernel(i * 2) = w
-      kernel(i * 2 + 1) = w
-      if (i != 0) {
-        kernel((WINDOWSIZE - i) * 2) = w
-        kernel((WINDOWSIZE - i) * 2 + 1) = w
-      }
-    }
-  }
-
   private def buildKernel(f:Float)= {
     val kernel = new Array[Float](WINDOWSIZE * 2)
-
+    def hamming(i:Int)=1 //0.53836f+0.46163f*Math.cos(2*Math.PI*i/WIDTH/2).toFloat
     for (i <- 0 until WIDTH) {
-      kernel(i * 2) = Math.cos(2 * Math.PI * i / WINDOWSIZE * f).toFloat / WIDTH
-      kernel(i * 2 + 1) = -Math.sin(2 * Math.PI * i / WINDOWSIZE * f).toFloat / WIDTH
+      kernel(i * 2) = hamming(i)*Math.cos(2 * Math.PI * i / WINDOWSIZE * f).toFloat / WIDTH
+      kernel(i * 2 + 1) = hamming(i)*Math.sin(2 * Math.PI * i / WINDOWSIZE * f).toFloat / WIDTH
       if (i != 0) {
-        kernel((WINDOWSIZE - i) * 2) = Math.cos(2 * Math.PI * i / WINDOWSIZE * f).toFloat / WIDTH
-        kernel((WINDOWSIZE - i) * 2 + 1) = -Math.sin(2 * Math.PI * i / WINDOWSIZE * f).toFloat / WIDTH
+        kernel((WINDOWSIZE - i) * 2) = hamming(-i)*Math.cos(2 * Math.PI * i / WINDOWSIZE * f).toFloat / WIDTH
+        kernel((WINDOWSIZE - i) * 2 + 1) = -hamming(-i)*Math.sin(2 * Math.PI * i / WINDOWSIZE * f).toFloat / WIDTH
       }
     }
     kernel
@@ -128,34 +115,31 @@ class FMCWFilter(timeOffset:Float) {
 
 
       //test
-      val fileout = new FileWriter("data/fmcwdata"+id.toString()+"." + outputted.toString() + ".txt")
+      if(AcousticProperty.DEBUG) {
+        val fileout = new FileWriter("data/fmcwdata" + id.toString() + "." + outputted.toString() + ".txt")
+        for (j <- 0 until WINDOWSIZE)
+          fileout.write(freqs(j).toString() + "\t")
+        fileout.close()
+        outputted += 1
+      }
+
+      val freqMax = argmax(freqs, WINDOWSIZE)
+      lastPeak = Some(freqMax)
+    }
+
+    //test
+    else if(AcousticProperty.DEBUG) {
+      val copyBuffer = new Array[Float](decodeBuffer.length)
+      Array.copy(decodeBuffer, 0, copyBuffer, 0, decodeBuffer.length)
+      val freqs = convo.fftComplexKernel(copyBuffer)
+      for (i <- 1 until WINDOWSIZE)
+        freqs(i) = freqs(i * 2) * freqs(i * 2) + freqs(i * 2 + 1) * freqs(i * 2 + 1)
+      val fileout = new FileWriter("data/fmcwdata" + id.toString() + "." + outputted.toString() + ".txt")
       for (j <- 0 until WINDOWSIZE)
         fileout.write(freqs(j).toString() + "\t")
       fileout.close()
       outputted += 1
-
-      /*for(i<-0 until WINDOWSIZE)
-        print(freqs(i)+"\t") 
-      println()
-      */
-
-      val freqMax = argmax(freqs, WINDOWSIZE)
-      lastPeak = Some(freqMax)
-      //println(freqMax)
     }
-
-    //test
-    val copyBuffer = new Array[Float](decodeBuffer.length)
-    Array.copy(decodeBuffer, 0, copyBuffer, 0, decodeBuffer.length)
-    val freqs = convo.fftComplexKernel(copyBuffer)
-    for (i <- 1 until WINDOWSIZE)
-      freqs(i) = freqs(i*2) * freqs(i*2) + freqs(i*2+1) * freqs(i*2+1)
-    val fileout = new FileWriter("data/fmcwdata"+id.toString()+"." + outputted.toString() + ".txt")
-    for (j <- 0 until WINDOWSIZE)
-      fileout.write(freqs(j).toString() + "\t")
-    fileout.close()
-    outputted += 1
-
 
 
     val kernel = buildKernel(lastPeak.get)
@@ -217,17 +201,15 @@ class FMCWFilter(timeOffset:Float) {
       currentDt=timeOffset*clockRatio
 
     }
-    val upchirpI=generateUpchirpI(currentDt.toFloat, clockRatio.toFloat)
-    val upchirpQ=generateUpchirpQ(currentDt.toFloat, clockRatio.toFloat)
+    val upchirpI=generateUpchirpI(currentDt, clockRatio)
+    val upchirpQ=generateUpchirpQ(currentDt, clockRatio)
 
     if(first) {
       val (_, prevFreqUp)=doFMCWFilter(upchirpI, upchirpQ, realSig, GAPBEGIN)
-      //println("first "+prevFreqUp)
       lastPeak=Some(prevFreqUp)
     }
 
     val (phases, freqUp)=doFMCWFilter(upchirpI, upchirpQ, realSig, GAPBEGIN)
-    //println("second "+freqUp)
     lastPeak=Some(freqUp)
 
     first=false
@@ -243,6 +225,7 @@ class FMCWFilter(timeOffset:Float) {
     println("currentDt "+currentDt+ " " + (DRIFTLIMIT.toFloat/AcousticProperty.SR)+ " "+phases(WIDTH))
     FMCWFilter.PhaseResult(phases, freqUp)
   }
+
   def skip(clockRatio:Double): Unit ={
     currentDt+=clockRatio*AcousticProperty.FMCW_CHIRP_DURATION
     if(currentDt>DRIFTLIMIT.toFloat/AcousticProperty.SR){
@@ -256,6 +239,6 @@ class FMCWFilter(timeOffset:Float) {
 
   //return drift amount in s
   def getTotalDriftTime()={
-    currentDt+sampOffset/AcousticProperty.SR
+    currentDt+sampOffset.toFloat/AcousticProperty.SR
   }
 }
