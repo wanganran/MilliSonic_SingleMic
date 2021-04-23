@@ -6,7 +6,7 @@ import org.jtransforms.fft.FloatFFT_1D
 
 import java.io.{FileOutputStream, FileWriter}
 
-class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int, blockDetector: BlockDetector=null) {
+class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int, blockDetector: BlockDetector=null, first_only:Boolean=false) {
   private val freqs = Array.range(0, AcousticProperty.SINARR_FREQ_NUM).map { i =>
     AcousticProperty.SINARR_FREQ_MIN + i * AcousticProperty.SINARR_FREQ_GAP
   }
@@ -40,7 +40,8 @@ class QuadSeparator(phaseShiftFunc: (Int, Float) => Float, transition:Int, block
   def input(sig: Array[Float], offset: Int): Array[Array[Float]] = {
     outputted += 1
     val newSig = new Array[Float](AcousticProperty.SINARR_DURATION)
-    val result = for (i <- 0 until AcousticProperty.CONCURRENT_TX) yield {
+    val ctx=if(first_only) 1 else AcousticProperty.CONCURRENT_TX
+    val result = for (i <- 0 until ctx) yield {
       val currSig = if (i == 0) lastSig else lastSig.slice(quarter * i, lastSig.length) ++ sig.slice(0, quarter * i)
       val sigPhase = conv.fftReal(currSig)
       freqs.foreach { f =>

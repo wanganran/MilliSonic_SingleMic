@@ -17,6 +17,7 @@ object OfflineMain extends App {
   val ALERT_BLOCK=1
   val ALERT_FULLBUFFER=2
   val ALERT_LOWSNR=3
+  val ALERT_OK=0
 
   def alert(i:Int){
     out_alert.write(i+"\n")
@@ -26,7 +27,7 @@ object OfflineMain extends App {
   if(args.length>3) Logger.setDest(args(3))
   Logger.setTag("Log")
 
-  val dataBuff = new ArrayBlockingQueue[(Option[Header], Array[Float])](100)
+  val dataBuff = new ArrayBlockingQueue[(Option[Header], Array[Float])](300)
 
   val generator = new SignalGenerator(true)
   val template = generator.generateTemplate()
@@ -37,7 +38,7 @@ object OfflineMain extends App {
   )
 
   val sync = new QuadSynchronization(template, SNR_MIN, 50)
-  val seperator = new QuadSeparator(generator.getPhaseFunc(), AcousticProperty.TRANSITION, blockDetector)
+  val seperator = new QuadSeparator(generator.getPhaseFunc(), AcousticProperty.TRANSITION, blockDetector, true)
   val fmcwFilters = Array.range(0, AcousticProperty.CONCURRENT_TX).map(i => new FMCWFilter(AcousticProperty.FMCW_CHIRP_DURATION * i / 5))
   Array.range(0, AcousticProperty.CONCURRENT_TX).map(i => fmcwFilters(i).setId(i))
 
@@ -101,6 +102,7 @@ object OfflineMain extends App {
             Logger.writeln("Synced. SNR: " + snr)
             if(snr<AcousticProperty.SNR_THRESHOLD)
               alert(ALERT_LOWSNR)
+            else alert(ALERT_OK)
 
             off = idx
             Array.copy(arr, AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE - off, pkt, 0, off)
@@ -109,6 +111,10 @@ object OfflineMain extends App {
       } else {
         Array.copy(arr, 0, pkt, off, AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE - off)
         dataBuff.put((header, pkt.clone()))
+        //Thread.sleep(50)
+        if(dataBuff.remainingCapacity()<2)
+          alert(ALERT_FULLBUFFER)
+
         Array.copy(arr, AcousticProperty.FMCW_CHIRP_DURATION_SAMPLE - off, pkt, 0, off)
       }
     }
