@@ -14,11 +14,21 @@ btAddress="CA:A1:E5:68:C7:DC"
 #btAddress="D0:7B:4A:C9:AB:01"
 #btAddress="F8:0E:C5:1E:C2:26"
 #btAddress="E2:6D:BF:ED:08:C7"
+# btAddress="EB:D6:61:23:42:18"
+
+prevCommand = ""
+
+def serialHelper(port, command):
+  prevCommand = command
+  for _ in command:
+    ser.write(_)
+    time.sleep(0.001)
+  ser.write("\n")
 
 # i.e: python data_logger.py <fs>
 if __name__ == '__main__':
   try:
-    # Grab user input for serial port
+    # # Grab user input for serial port
     ports = serial.tools.list_ports.comports()
 
     i = 1
@@ -41,45 +51,52 @@ if __name__ == '__main__':
       exit
 
     portName = ports[port].device
+    # portName = "/dev/tty.usbmodem0006832759131"
     ser = serial.Serial(portName, 115200)
 
     # Create output file
     f = open("output.bin","w+")
     trailingSample = None
     if TS:
-        ser.write("ts on\n")
+        serialHelper(ser, "ts on")
         scriptIndex = 0
     else:
-        ser.write("ts off\n")
+        serialHelper(ser, "ts off")
         time.sleep(.25)
         scriptIndex = 0
+
+    print("Sending commands...")
 
     while True:
       data = str(ser.readline())
       data = data.strip()
+      if ("not found" in data):
+        print("Error sending last command, retrying")
+        serialHelper(ser, prevCommand)
+        continue
       if (scriptIndex == 0 and "Time sync" in data):
-        ser.write("scan on\n")
-        time.sleep(.25)
+        serialHelper(ser, "scan on")
+        # time.sleep(.25)
         scriptIndex += 1
       if (scriptIndex == 1 and "Scan started" in data):
-        ser.write("connect " + btAddress + " \n")
-        time.sleep(.25)
+        serialHelper(ser, "connect " + btAddress + " ")
+        # time.sleep(.25)
         scriptIndex += 1
       if (scriptIndex == 2 and "Data length updated to 251 bytes" in data):
-        ser.write("parameters phy 2M "+ btAddress + "\n")
-        time.sleep(.25)
+        serialHelper(ser, "parameters phy 2M "+ btAddress + "")
+        # time.sleep(.25)
         scriptIndex += 1
       if (scriptIndex == 3 and "PHY set to 2 Mbps" in data):
-        ser.write("gatt services " + btAddress + "\n")
-        time.sleep(.25)
+        serialHelper(ser, "gatt services " + btAddress + "")
+        # time.sleep(.25)
         scriptIndex += 1
       if (scriptIndex == 4 and "Found service UUIDs" in data):
-        ser.write("gatt characteristics " + btAddress + " 1400\n")
-        time.sleep(.25)
+        serialHelper(ser, "gatt characteristics " + btAddress + " 1400")
+        # time.sleep(.25)
         scriptIndex += 1
       if (scriptIndex == 5 and "Number of characteristics" in data):
-        ser.write("gatt notification on " + btAddress + " 1402\n")
-        time.sleep(.25)
+        serialHelper(ser, "gatt notification on " + btAddress + " 1402")
+        # time.sleep(.25)
         scriptIndex += 1
       # pdb.set_trace())
       print(data)
