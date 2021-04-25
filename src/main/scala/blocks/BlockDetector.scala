@@ -38,7 +38,7 @@ class BlockDetector (alpha:Float, duration:Int, thres:Float, callback:Boolean=>U
       false
     } else if (!is_blocked) {
       val new_avg = moving_avg.get * alpha + (1 - alpha) * snr
-      //Logger.writeln("block SNR "+new_avg+" "+snr)
+      Logger.writeln("block SNR "+new_avg+" "+snr)
       moving_avg = Some(new_avg)
       if (1 - snr / new_avg > thres) {
         last_SNR = Some(new_avg)
@@ -50,7 +50,7 @@ class BlockDetector (alpha:Float, duration:Int, thres:Float, callback:Boolean=>U
       else false
     } else { // blocked
       moving_avg = Some(moving_avg.get * alpha + (1 - alpha) * snr)
-      //Logger.writeln("block SNR "+moving_avg.get+" "+snr)
+      Logger.writeln("block SNR "+moving_avg.get+" "+snr)
       if (1 - snr / last_SNR.get < thres) {
         non_blocking_cnt += 1
         if (non_blocking_cnt > duration) {

@@ -4,16 +4,19 @@ import blocks.{BlockDetector, QuadSeparator, QuadSynchronization, SignalGenerato
 import config.AcousticProperty
 import utils.{ClockSync, FIRFilter, Header, HeaderExtraction, Logger, int}
 
-import java.io.{FileInputStream, FileReader, FileWriter}
+import java.io.{FileInputStream, FileOutputStream, FileReader, FileWriter}
 import java.util.Scanner
 import java.util.concurrent.ArrayBlockingQueue
 
 object OfflineMain extends App {
 
-  // Serial input from AP, serial input from speaker, output to sound, output to log [or stdin]
+  // Serial input from AP, serial input from speaker, output to sound, raw AP data dest, raw speaker data dest, output to log [or stdin]
+
   val in_ap = new FileInputStream(args(0))
   val in_spk = new Scanner(new FileInputStream(args(1)))
   val out_alert = new FileWriter(args(2))
+  val out_ap=new FileOutputStream(args(3))
+  val out_spk=new FileWriter(args(4))
   val ALERT_BLOCK=1
   val ALERT_FULLBUFFER=2
   val ALERT_LOWSNR=3
@@ -24,7 +27,7 @@ object OfflineMain extends App {
     out_alert.flush()
   }
 
-  if(args.length>3) Logger.setDest(args(3))
+  if(args.length>5) Logger.setDest(args(5))
   Logger.setTag("Log")
 
   val dataBuff = new ArrayBlockingQueue[(Option[Header], Array[Float])](300)
@@ -83,6 +86,8 @@ object OfflineMain extends App {
     speakerClkCnt += 1
     if (speakerClkCnt > speakerCntTot && in_spk.hasNextLine() && header.nonEmpty) {
       val clock = in_spk.nextLine().trim().toInt // microseconds per 50k samples
+      out_spk.write(clock.toString+"\n")
+      out_spk.flush()
       Logger.writeln("Speaker Clk")
       header.foreach {
         _.speakerClk = Some(clock)
@@ -123,6 +128,8 @@ object OfflineMain extends App {
   var left_preheat = AcousticProperty.PREHEAT
   while (true) {
     val len = in_ap.read(buffer, 0, buffer.length)
+    out_ap.write(buffer,0,len)
+    out_ap.flush()
     if (left_preheat == 0) {
       if (len == buffer.length)
         headerExtraction.detectHeader(buffer)
