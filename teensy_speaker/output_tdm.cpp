@@ -210,8 +210,8 @@ void AudioOutputTDM::update(void)
   #define MCLK_DIV  225
   #define MCLK_SRC  0
 #elif F_CPU == 192000000
-  #define MCLK_MULT 2
-  #define MCLK_DIV  17
+  #define MCLK_MULT 16
+  #define MCLK_DIV  125
 #elif F_CPU == 216000000
   #define MCLK_MULT 12
   #define MCLK_DIV  17
